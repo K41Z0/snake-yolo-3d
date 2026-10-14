@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Snake Yolo 3D</title>
+<style>
+  :root {
+    --bg: #0b0f16;
+    --panel: rgba(18, 24, 33, .78);
+    --line: rgba(90, 120, 160, .28);
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --gold: #e3b341;
+    --gold-light: #f2c65a;
+    --green: #36c65f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); }
+  body {
+    color: var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #surface { position: fixed; inset: 0; }
+  .hud {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    pointer-events: none;
+  }
+  .chip {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 7px 13px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    backdrop-filter: blur(6px);
+  }
+  .chip small { color: var(--muted); font-size: 11px; letter-spacing: .4px; text-transform: uppercase; }
+  .chip b { font-size: 19px; font-variant-numeric: tabular-nums; }
+  #best { color: var(--gold-light); }
+  #overlay {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(430px, calc(100vw - 48px));
+    background: rgba(11, 15, 22, .86);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    backdrop-filter: blur(8px);
+  }
+  #overlay[hidden] { display: none; }
+  #overlay h1 { margin: 0; font-size: 21px; letter-spacing: .2px; }
+  #overlay h1 span { color: var(--gold-light); }
+  #overlay h2 { margin: 5px 0 0; font-size: 19px; }
+  #overlay p { margin: 0; color: var(--muted); font-size: 13.5px; }
+  #overlay .big { color: var(--gold-light); font-size: 24px; font-weight: 600; }
+  #overlay .hint { color: var(--muted); font-size: 12.5px; }
+  kbd {
+    background: #1b2431;
+    border: 1px solid #2c3a4c;
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 1px 5px;
+    font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--text);
+  }
+  #toast {
+    position: fixed;
+    top: 74px;
+    left: 50%;
+    transform: translate(-50%, -12px);
+    background: linear-gradient(135deg, var(--gold), var(--gold-light));
+    color: #1c1400;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    opacity: 0;
+    transition: opacity .25s, transform .25s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .legend {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    pointer-events: none;
+    padding: 0 12px;
+  }
+  .pad {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    display: none;
+    gap: 8px;
+    grid-template-columns: repeat(3, 52px);
+    grid-template-rows: repeat(2, 52px);
+  }
+  .pad button {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 18px;
+    border-radius: 12px;
+  }
+  .pad button:active { background: #22303f; }
+  .pad .up { grid-area: 1 / 2; }
+  .pad .left { grid-area: 2 / 1; }
+  .pad .down { grid-area: 2 / 2; }
+  .pad .right { grid-area: 2 / 3; }
+  @media (pointer: coarse) { .pad { display: grid; } }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="surface"></div>
+
+<div class="hud">
+  <div class="chip"><small>Score</small><b id="score">0</b></div>
+  <div class="chip"><small>Best</small><b id="best">0</b></div>
+</div>
+
+<div id="overlay">
+  <h1>Snake <span>Yolo</span> 3D</h1>
+  <h2 id="ov-title">Ready?</h2>
+  <p id="ov-text">Arrows or WASD to move. <kbd>Space</kbd> to pause.</p>
+  <p class="big" id="ov-score"></p>
+  <p class="hint" id="ov-hint">Press <kbd>Enter</kbd> or click the board to start</p>
+</div>
+
+<div id="toast"></div>
+
+<div class="pad">
+  <button class="up" data-dir="up">&#9650;</button>
+  <button class="left" data-dir="left">&#9664;</button>
+  <button class="down" data-dir="down">&#9660;</button>
+  <button class="right" data-dir="right">&#9654;</button>
+</div>
+
+<div class="legend">build 7 · Eat the YOLO badges · <kbd>Space</kbd> pause · <kbd>Enter</kbd> restart · <kbd>M</kbd> sound</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/core/grid.js"></script>
+<script src="js/core/snake.js"></script>
+<script src="js/core/world.js"></script>
+<script src="js/core/loop.js"></script>
+<script src="js/render/theme.js"></script>
+<script src="js/render/layout.js"></script>
+<script src="js/render/stage.js"></script>
+<script src="js/render/board.js"></script>
+<script src="js/render/snakeView.js"></script>
+<script src="js/render/badgeView.js"></script>
+<script src="js/ui/hud.js"></script>
+<script src="js/ui/input.js"></script>
+<script src="js/ui/audio.js"></script>
+<script src="js/main.js"></script>
+<script>
+  if (typeof window.SY === "undefined" || !window.SY.config) {
+    document.getElementById("overlay").innerHTML =
+      "<h2>Game files did not load</h2>" +
+      "<p>Unzip the archive and open <code>index.html</code> from the unzipped folder — " +
+      "the page loads <code>js/</code> and <code>vendor/</code> from the folder it sits in.</p>";
+  }
+</script>
+</body>
+</html>
